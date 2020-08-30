@@ -19,7 +19,7 @@
 
 1. 采用时间图的形式对排程信息进行显示。时间图示例如下图：
 
-![image-20200830141851715](/Users/lijunting/Desktop/未命名文件夹/image-20200830141851715.png)
+![image-20200830141851715](./Readme Pics/image-20200830141851715.png)
 
 1. 2B的UI设计，力求清晰、高效
 
@@ -61,8 +61,8 @@
 
 ### 生产排程生成流程
 
-![image-20200830142019490](/Users/lijunting/Desktop/未命名文件夹/image-20200830142019490.png)
+![image-20200830142019490](./Readme%20Pics/image-20200830142019490.png)
 
 ### 部分操作流程
 
-![image-20200830142234356](/Users/lijunting/Desktop/未命名文件夹/image-20200830142234356.png)
+![image-20200830142234356](./Readme%20Pics/image-20200830142234356.png)
