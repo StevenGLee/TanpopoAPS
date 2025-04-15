@@ -1,0 +1,349 @@
+﻿@page "/kanban"
+@using System.Collections.Generic
+@using Microsoft.AspNetCore.Mvc.ViewFeatures
+@using TanpopoWeb.Data
+@using System.Globalization
+
+@{
+    // 模拟生产排期数据
+    var productionData = new List<ProductionItem>
+    {
+        new ProductionItem { StartTime = DateTime.Parse("2023-10-10 8:00"), EndTime = DateTime.Parse("2023-10-10 8:30"), Machine = "车床1", Order = "定单1", Quantity = 250, Type = "order1" },
+        new ProductionItem { StartTime = DateTime.Parse("2023-10-10 8:00"), EndTime = DateTime.Parse("2023-10-10 8:30"), Machine = "车床2", Order = "定单1", Quantity = 250, Type = "order1" },
+        new ProductionItem { StartTime = DateTime.Parse("2023-10-10 8:40"), EndTime = DateTime.Parse("2023-10-10 9:00"), Machine = "车床1", Order = "其他订单", Quantity = null, Type = "other" },
+        new ProductionItem { StartTime = DateTime.Parse("2023-10-10 8:40"), EndTime = DateTime.Parse("2023-10-10 9:00"), Machine = "车床2", Order = "其他订单", Quantity = null, Type = "other" },
+        new ProductionItem { StartTime = DateTime.Parse("2023-10-10 8:40"), EndTime = DateTime.Parse("2023-10-10 9:20"), Machine = "车床3", Order = "定单3", Quantity = 250, Type = "order3" },
+        new ProductionItem { StartTime = DateTime.Parse("2023-10-10 8:40"), EndTime = DateTime.Parse("2023-10-10 9:20"), Machine = "车床4", Order = "定单3", Quantity = 250, Type = "order3" },
+        new ProductionItem { StartTime = DateTime.Parse("2023-10-10 9:00"), EndTime = DateTime.Parse("2023-10-10 9:20"), Machine = "车床5", Order = "定单1", Quantity = 150, Type = "order1" },
+        new ProductionItem { StartTime = DateTime.Parse("2023-10-10 9:00"), EndTime = DateTime.Parse("2023-10-10 9:20"), Machine = "车床6", Order = "定单1", Quantity = 150, Type = "order1" },
+        new ProductionItem { StartTime = DateTime.Parse("2023-10-10 9:20"), EndTime = DateTime.Parse("2023-10-10 9:40"), Machine = "车床1", Order = "定单3", Quantity = 250, Type = "order3" },
+        new ProductionItem { StartTime = DateTime.Parse("2023-10-10 9:20"), EndTime = DateTime.Parse("2023-10-10 9:40"), Machine = "车床2", Order = "定单3", Quantity = 250, Type = "order3" },
+        new ProductionItem { StartTime = DateTime.Parse("2023-10-10 9:40"), EndTime = DateTime.Parse("2023-10-10 10:00"), Machine = "车床5", Order = "其他订单", Quantity = null, Type = "other" },
+        new ProductionItem { StartTime = DateTime.Parse("2023-10-10 9:40"), EndTime = DateTime.Parse("2023-10-10 10:00"), Machine = "车床6", Order = "其他订单", Quantity = null, Type = "other" },
+        new ProductionItem { StartTime = DateTime.Parse("2023-10-10 9:40"), EndTime = DateTime.Parse("2023-10-10 10:00"), Machine = "车床3", Order = "其他订单", Quantity = null, Type = "other-orange" },
+        new ProductionItem { StartTime = DateTime.Parse("2023-10-10 9:40"), EndTime = DateTime.Parse("2023-10-10 10:00"), Machine = "车床4", Order = "其他订单", Quantity = null, Type = "other-orange" }
+    };
+
+    // 动态车床列表
+    var machines = new List<string> { "车床1", "车床2", "车床3", "车床4", "车床5", "车床6" };
+
+    // 生成时间轴
+    var times = GenerateTimeAxis();
+    var timeToIndex = times.Select((time, index) => new { Time = time, Index = index })
+                           .ToDictionary(x => x.Time, x => x.Index);
+
+    // 初始化表格
+    var rows = InitializeTable(times, machines, productionData, timeToIndex);
+
+    // 计算当前时间指示器的位置
+    var (foundRow, relativePosition) = CalculateCurrentTimeRow(times);
+}
+
+<div class="schedule-container">
+    <table class="schedule-table table table-bordered table-hover">
+        <thead>
+            <tr>
+                <th class="time-cell"></th>
+                @foreach (var machine in machines)
+                {
+                    <th class="header-cell">@machine</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in rows)
+            {
+                <tr>
+                    @foreach (var cell in row.Cells)
+                    {
+                        string content = cell.Content;
+                        <td class="@cell.CssClass" rowspan="@cell.RowSpan">@((MarkupString)cell.Content)</td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<div class="current-time-indicator" id="currentTimeIndicator"></div>
+
+<style>
+    .schedule-container {
+        overflow: auto;
+        position: relative;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        height: calc(100vh - 3.5rem - 32px);
+        width: calc(100vw)
+    }
+
+    @@media (min-width: 768px) {
+        .schedule-container {
+            overflow: auto;
+            position: relative;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            height: calc(100vh - 3.5rem - 32px);
+            width: calc(100vw - 8rem - 250px) !important;
+        }
+    }
+
+    .schedule-table {
+        min-width: 100%;
+        border-collapse: collapse;
+        background-color: #fff;
+    }
+
+    .time-cell {
+        width: 10em;
+        padding: 10px;
+        text-align: right;
+        border: 1px solid #e9ecef;
+        font-size: 12px;
+        color: #6c757d;
+        background-color: #f8f9fa;
+        position: sticky;
+        left: 0;
+        z-index: 2;
+    }
+
+    .header-cell {
+        min-width: 10em;
+        padding: 10px;
+        text-align: center;
+        font-weight: bold;
+        border: 1px solid #e9ecef;
+        background-color: #f8f9fa;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .data-cell {
+        min-width: 10em;
+        padding: 5px;
+        text-align: center;
+        border: 1px solid #e9ecef;
+        height: 60px;
+        position: relative;
+        background-color: white;
+        vertical-align: middle;
+    }
+
+    .order-block {
+        position: absolute;
+        top: 5px;
+        left: 5px;
+        right: 5px;
+        bottom: 5px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        font-weight: bold;
+        color: white;
+        overflow: hidden;
+    }
+
+    .order-block-inner {
+        padding: 8px;
+    }
+
+    .order1 {
+        background-color: #ffc107;
+    }
+    /* 黄色 */
+    .order2 {
+        background-color: #007bff;
+    }
+    /* 蓝色 */
+    .order3 {
+        background-color: #28a745;
+    }
+    /* 绿色 */
+    .other {
+        background-color: #6c757d;
+    }
+    /* 灰色 */
+    .other-orange {
+        background-color: #fd7e14;
+    }
+    /* 橙色 */
+    .empty {
+        background-color: white;
+    }
+    /* 空白 */
+
+    .current-time-indicator {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background-color: red;
+        z-index: 10;
+        pointer-events: none;
+        display: none;
+    }
+</style>
+
+<script>
+    // 更新当前时间指示器
+    function updateCurrentTimeIndicator(foundRow, relativePosition) {
+        const scheduleContainer = document.querySelector('.schedule-container');
+        const timeCells = document.querySelectorAll('.time-cell');
+        const currentTimeIndicator = document.getElementById('currentTimeIndicator');
+
+        if (foundRow !== -1 && foundRow < timeCells.length - 1) {
+            const row = timeCells[foundRow].parentElement;
+            const rowRect = row.getBoundingClientRect();
+            const scheduleRect = scheduleContainer.getBoundingClientRect();
+
+            // 设置指示器位置
+            const indicatorTop = rowRect.top + relativePosition * rowRect.height;
+            const indicatorLeft = rowRect.left;
+            const indicatorWidth = rowRect.right - rowRect.left;
+            currentTimeIndicator.style.top = `${indicatorTop}px`;
+            currentTimeIndicator.style.left = `${indicatorLeft}px`;
+            currentTimeIndicator.style.width = `${indicatorWidth}px`;
+            currentTimeIndicator.style.display = 'block';
+        } else {
+            currentTimeIndicator.style.display = 'none';
+        }
+    }
+
+    // 页面加载完成后初始化
+    window.onload = () => {
+        updateCurrentTimeIndicator(@foundRow, @relativePosition);
+        setInterval(updateCurrentTimeIndicator, 1000);
+    };
+</script>
+
+@code {
+    public class TableCell
+    {
+        public string CssClass { get; set; }
+        public int RowSpan { get; set; }
+        public string Content { get; set; }
+    }
+
+    public class TableRow
+    {
+        public List<TableCell> Cells { get; set; } = new List<TableCell>();
+    }
+
+    private List<DateTime> GenerateTimeAxis()
+    {
+        var times = new List<DateTime>();
+        var currentDate = new DateTime(2023, 10, 10, 8, 0, 0);
+        var endDate = new DateTime(2023, 10, 10, 10, 0, 0);
+
+        while (currentDate <= endDate)
+        {
+            times.Add(currentDate);
+            currentDate = currentDate.AddMinutes(10);
+        }
+
+        return times;
+    }
+
+    private List<TableRow> InitializeTable(List<DateTime> times, List<string> machines, List<ProductionItem> productionData, Dictionary<DateTime, int> timeToIndex)
+    {
+        var rows = new List<TableRow>();
+
+        // 创建行
+        foreach (var time in times)
+        {
+            var row = new TableRow();
+            row.Cells.Add(new TableCell { CssClass = "time-cell", Content = time.ToString("yyyy-MM-dd HH:mm"), RowSpan = 1 });
+
+            // 为每个车床创建data-cell
+            foreach (var machine in machines)
+            {
+                row.Cells.Add(new TableCell { CssClass = "data-cell", Content = "", RowSpan = 1 });
+            }
+
+            rows.Add(row);
+        }
+
+        // 填充数据
+        foreach (var item in productionData)
+        {
+            if (!machines.Contains(item.Machine)) continue;
+
+            if (!timeToIndex.TryGetValue(item.StartTime, out var startIndex) ||
+                !timeToIndex.TryGetValue(item.EndTime, out var endIndex))
+            {
+                continue;
+            }
+
+            var duration = endIndex - startIndex + 1;
+            var machineIndex = machines.IndexOf(item.Machine);
+            var row = rows[startIndex];
+            var cell = row.Cells[machineIndex + 1]; // 第0列是时间列
+
+            cell.CssClass = $"data-cell";
+            cell.RowSpan = duration;
+            cell.Content = $"<div class=\"order-block {item.Type}\">" +
+                           $"<div class=\"order-block-inner\">{item.Order}{(item.Quantity.HasValue ? $"<br>{item.Quantity}个" : "")}</div>" +
+                           $"</div>";
+
+            // 清空后续单元格
+            for (int i = startIndex + 1; i <= endIndex+1; i++)
+            {
+                if (i < rows.Count)
+                {
+                    var nextCell = rows[i].Cells[machineIndex + 1];
+                    nextCell.Content = "delete";
+                }
+            }
+        }
+        foreach (var row in rows)
+        {
+            row.Cells.RemoveAll(ToDelete);
+        }
+
+        return rows;
+    }
+
+    private static bool ToDelete(TableCell cell)
+    {
+        return cell.Content.Equals("delete");
+    }
+
+    private (int, double) CalculateCurrentTimeRow(List<DateTime> times)
+    {
+        // 设置当前时间为调试时间
+        var now = new DateTime(2023, 10, 10, 9, 5, 0);
+
+        // 查找当前时间所在的行
+        int foundRow = -1;
+        for (int i = 0; i < times.Count - 1; i++)
+        {
+            var startTime = times[i];
+            var endTime = times[i + 1];
+
+            if (now >= startTime && now < endTime)
+            {
+                foundRow = i;
+                break;
+            }
+        }
+
+        if (foundRow != -1)
+        {
+            var startTime = times[foundRow];
+            var endTime = times[foundRow + 1];
+            var totalDuration = (endTime - startTime).TotalSeconds;
+            var elapsedDuration = (now - startTime).TotalSeconds;
+            var relativePosition = elapsedDuration / totalDuration;
+
+            return (foundRow, relativePosition);
+        }
+
+        return (-1, 0);
+    }
+}
