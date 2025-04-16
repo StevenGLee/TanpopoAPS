@@ -1,0 +1,477 @@
+﻿@page "/product-detail"
+@using System.ComponentModel.DataAnnotations
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<h3>产品管理</h3>
+<hr />
+
+@if (products == null)
+{
+    <p>正在加载产品列表...</p>
+}
+else
+{
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5>产品列表</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    @{
+                                        String ProductCodeStr = "ProductCode";
+                                        String NameStr = "Name";
+                                        String VersionStr = "Version";
+                                        String ProductTypeStr = "ProductType";
+                                    }
+                                    <th @onclick="() => SortProducts(ProductCodeStr)">
+                                        产品编码
+                                        @GetSortIcon("ProductCode")
+                                    </th>
+                                    <th @onclick="() => SortProducts(NameStr)">
+                                        产品名称
+                                        @GetSortIcon("Name")
+                                    </th>
+                                    <th @onclick="() => SortProducts(VersionStr)">
+                                        版本号
+                                        @GetSortIcon("Version")
+                                    </th>
+                                    <th @onclick="() => SortProducts(ProductTypeStr)">
+                                        产品类型
+                                        @GetSortIcon("ProductType")
+                                    </th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in products)
+                                {
+                                    <tr @ondblclick="() => OpenEditModal(item)">
+                                        <td>@item.ProductCode</td>
+                                        <td>@item.Name</td>
+                                        <td>@item.Version</td>
+                                        <td>@GetProductTypeName(item.ProductType)</td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-outline-primary me-1" @onclick="(() => OpenEditModal(item))">
+                                                <i class="bi bi-pencil"></i> 编辑
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="(() => DeleteProduct(item))">
+                                                <i class="bi bi-trash"></i> 删除
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button class="btn btn-success" @onclick="OpenNewModal">
+                        <i class="bi bi-plus"></i> 新建产品
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- 产品详细信息模态窗口 -->
+<div class="modal fade" id="productDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">@(selectedProduct?.Name ?? "新建产品") - 详细信息</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                @if (selectedProduct != null)
+                {
+                    <form @onsubmit="SaveProduct">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="ProductCode" class="form-label">产品编码</label>
+                                    <input type="text" class="form-control" id="ProductCode" @bind="selectedProduct.ProductCode" required />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="ProductName" class="form-label">产品名称</label>
+                                    <input type="text" class="form-control" id="ProductName" @bind="selectedProduct.Name" required />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="Specification" class="form-label">规格</label>
+                                    <input type="text" class="form-control" id="Specification" @bind="selectedProduct.Specification" />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="Version" class="form-label">版本号</label>
+                                    <input type="text" class="form-control" id="Version" @bind="selectedProduct.Version" />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="ProductType" class="form-label">产品类型</label>
+                                    <select class="form-select" id="ProductType" @bind="selectedProduct.ProductType">
+                                        <option value="Standard">标准品</option>
+                                        <option value="Custom">定制件</option>
+                                        <option value="SemiFinished">半成品</option>
+                                        <option value="RawMaterial">原材料</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="MinProductionQuantity" class="form-label">最小生产批量 (MOQ)</label>
+                                    <input type="number" class="form-control" id="MinProductionQuantity" @bind="selectedProduct.MinProductionQuantity" min="1" />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="MaxProductionQuantity" class="form-label">最大生产批量 (MPQ)</label>
+                                    <input type="number" class="form-control" id="MaxProductionQuantity" @bind="selectedProduct.MaxProductionQuantity" min="1" />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="ProductionLeadTime" class="form-label">生产提前期 (天)</label>
+                                    <input type="number" class="form-control" id="ProductionLeadTime" @bind="selectedProduct.ProductionLeadTime" min="1" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="IsActive" @bind="selectedProduct.IsActive" />
+                                    <label class="form-check-label" for="IsActive">
+                                        产品是否启用
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                }
+                else
+                {
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                        <p class="mt-3">正在加载产品信息...</p>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" @onclick="SaveProduct">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(message))
+{
+    <div class="alert alert-success mt-3">
+        @message
+    </div>
+}
+
+@code {
+    private List<ProductViewModel> products;
+    private ProductViewModel selectedProduct;
+    private string currentSortColumn = "ProductCode";
+    private SortDirection currentSortDirection = SortDirection.Ascending;
+    private string message = string.Empty;
+    private IJSObjectReference? modalModule;
+    private BootstrapModal? modal;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProducts();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            modalModule = await JSRuntime.InvokeAsync<IJSObjectReference>("bootstrap.Modal.getOrCreateInstance", "#productDetailModal");
+            modal = new BootstrapModal(modalModule);
+        }
+    }
+
+    private async Task LoadProducts()
+    {
+        // 模拟从数据库加载产品数据
+        // 实际应用中应该调用服务或API来获取数据
+        products = new List<ProductViewModel>
+        {
+            new ProductViewModel
+            {
+                Id = 1,
+                ProductCode = "PRD-0001",
+                Name = "高性能电机",
+                Specification = "12V, 2A, 3000RPM",
+                Version = "V2.1",
+                ProductType = "Standard",
+                MinProductionQuantity = 100,
+                MaxProductionQuantity = 10000,
+                ProductionLeadTime = 15,
+                IsActive = true
+            },
+            new ProductViewModel
+            {
+                Id = 2,
+                ProductCode = "PRD-0002",
+                Name = "定制控制器",
+                Specification = "输入电压: 24V, 输出电流: 5A",
+                Version = "V1.0",
+                ProductType = "Custom",
+                MinProductionQuantity = 50,
+                MaxProductionQuantity = 500,
+                ProductionLeadTime = 30,
+                IsActive = true
+            },
+            new ProductViewModel
+            {
+                Id = 3,
+                ProductCode = "PRD-0003",
+                Name = "铝制外壳",
+                Specification = "尺寸: 100x50x20mm, 材质: 6061铝",
+                Version = "V1.2",
+                ProductType = "SemiFinished",
+                MinProductionQuantity = 200,
+                MaxProductionQuantity = 5000,
+                ProductionLeadTime = 7,
+                IsActive = true
+            },
+            new ProductViewModel
+            {
+                Id = 4,
+                ProductCode = "PRD-0004",
+                Name = "润滑脂",
+                Specification = "耐温: -40°C至150°C, 包装: 1kg/桶",
+                Version = "V1.0",
+                ProductType = "RawMaterial",
+                MinProductionQuantity = 1000,
+                MaxProductionQuantity = 10000,
+                ProductionLeadTime = 5,
+                IsActive = true
+            }
+        };
+
+        // 默认排序
+        SortProducts(currentSortColumn);
+        StateHasChanged();
+    }
+
+    private void SortProducts(string column)
+    {
+        if (currentSortColumn == column)
+        {
+            currentSortDirection = currentSortDirection == SortDirection.Ascending
+                ? SortDirection.Descending
+                : SortDirection.Ascending;
+        }
+        else
+        {
+            currentSortColumn = column;
+            currentSortDirection = SortDirection.Ascending;
+        }
+
+        switch (currentSortColumn)
+        {
+            case "ProductCode":
+                products = currentSortDirection == SortDirection.Ascending
+                    ? products.OrderBy(p => p.ProductCode).ToList()
+                    : products.OrderByDescending(p => p.ProductCode).ToList();
+                break;
+            case "Name":
+                products = currentSortDirection == SortDirection.Ascending
+                    ? products.OrderBy(p => p.Name).ToList()
+                    : products.OrderByDescending(p => p.Name).ToList();
+                break;
+            case "Version":
+                products = currentSortDirection == SortDirection.Ascending
+                    ? products.OrderBy(p => p.Version).ToList()
+                    : products.OrderByDescending(p => p.Version).ToList();
+                break;
+            case "ProductType":
+                products = currentSortDirection == SortDirection.Ascending
+                    ? products.OrderBy(p => p.ProductType).ToList()
+                    : products.OrderByDescending(p => p.ProductType).ToList();
+                break;
+        }
+
+        StateHasChanged();
+    }
+
+    private string GetSortIcon(string column)
+    {
+        if (currentSortColumn != column)
+            return "";
+
+        return currentSortDirection == SortDirection.Ascending
+            ? "↑"
+            : "↓";
+    }
+
+    private string GetProductTypeName(string productType)
+    {
+        return productType switch
+        {
+            "Standard" => "标准品",
+            "Custom" => "定制件",
+            "SemiFinished" => "半成品",
+            "RawMaterial" => "原材料",
+            _ => productType
+        };
+    }
+
+    private void OpenEditModal(ProductViewModel product)
+    {
+        selectedProduct = (ProductViewModel)product.Clone();
+        modal?.Show();
+    }
+
+    private void OpenNewModal()
+    {
+        selectedProduct = new ProductViewModel
+            {
+                ProductCode = "NEW-XXXX",
+                Name = "新产品质量",
+                IsActive = true
+            };
+        modal?.Show();
+    }
+
+    private void DeleteProduct(ProductViewModel product)
+    {
+        products.Remove(product);
+        message = $"产品 {product.Name} 已删除";
+
+        // 3秒后清空消息
+        Task.Delay(3000).ContinueWith(t => InvokeAsync(() => message = ""));
+    }
+
+    private async Task SaveProduct()
+    {
+        // 验证表单
+        if (selectedProduct.MinProductionQuantity > selectedProduct.MaxProductionQuantity)
+        {
+            message = "最小生产批量不能大于最大生产批量";
+            return;
+        }
+
+        // 模拟保存产品数据
+        // 实际应用中应该调用服务或API来保存数据
+
+        // 如果是新建产品，添加到列表
+        if (selectedProduct.Id == 0)
+        {
+            selectedProduct.Id = products.Any() ? products.Max(p => p.Id) + 1 : 1;
+            products.Add(selectedProduct);
+            message = $"产品 {selectedProduct.Name} 已创建";
+        }
+        else
+        {
+            // 更新现有产品
+            var originalProduct = products.First(p => p.Id == selectedProduct.Id);
+            originalProduct.ProductCode = selectedProduct.ProductCode;
+            originalProduct.Name = selectedProduct.Name;
+            originalProduct.Specification = selectedProduct.Specification;
+            originalProduct.Version = selectedProduct.Version;
+            originalProduct.ProductType = selectedProduct.ProductType;
+            originalProduct.MinProductionQuantity = selectedProduct.MinProductionQuantity;
+            originalProduct.MaxProductionQuantity = selectedProduct.MaxProductionQuantity;
+            originalProduct.ProductionLeadTime = selectedProduct.ProductionLeadTime;
+            originalProduct.IsActive = selectedProduct.IsActive;
+
+            message = $"产品 {selectedProduct.Name} 已更新";
+        }
+
+        // 重新排序列表
+        SortProducts(currentSortColumn);
+
+        // 关闭模态窗口
+        modal?.Hide();
+
+        // 3秒后清空消息
+        await Task.Delay(3000);
+        message = "";
+    }
+
+    public enum SortDirection
+    {
+        Ascending,
+        Descending
+    }
+
+    public class ProductViewModel : ICloneable
+    {
+        public int Id { get; set; }
+
+        [Required]
+        public string ProductCode { get; set; }
+
+        [Required]
+        public string Name { get; set; }
+
+        public string Specification { get; set; }
+
+        public string Version { get; set; }
+
+        public string ProductType { get; set; }
+
+        public int MinProductionQuantity { get; set; }
+
+        public int MaxProductionQuantity { get; set; }
+
+        public int ProductionLeadTime { get; set; }
+
+        public bool IsActive { get; set; } = true;
+
+        public object Clone()
+        {
+            return new ProductViewModel
+                {
+                    Id = Id,
+                    ProductCode = ProductCode,
+                    Name = Name,
+                    Specification = Specification,
+                    Version = Version,
+                    ProductType = ProductType,
+                    MinProductionQuantity = MinProductionQuantity,
+                    MaxProductionQuantity = MaxProductionQuantity,
+                    ProductionLeadTime = ProductionLeadTime,
+                    IsActive = IsActive
+                };
+        }
+    }
+
+    public class BootstrapModal
+    {
+        private readonly IJSObjectReference _modal;
+
+        public BootstrapModal(IJSObjectReference modal)
+        {
+            _modal = modal;
+        }
+
+        public async Task Show()
+        {
+            await _modal.InvokeVoidAsync("show");
+        }
+
+        public async Task Hide()
+        {
+            await _modal.InvokeVoidAsync("hide");
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (_modal != null)
+            {
+                await _modal.DisposeAsync();
+            }
+        }
+    }
+}
