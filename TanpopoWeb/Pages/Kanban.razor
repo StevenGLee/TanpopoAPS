@@ -3,6 +3,7 @@
 @using Microsoft.AspNetCore.Mvc.ViewFeatures
 @using TanpopoWeb.Data
 @using System.Globalization
+@inject IJSRuntime JSRuntime
 
 @{
     // 模拟生产排期数据
@@ -35,8 +36,8 @@
     // 初始化表格
     var rows = InitializeTable(times, machines, productionData, timeToIndex);
 
-    // 计算当前时间指示器的位置
-    var (foundRow, relativePosition) = CalculateCurrentTimeRow(times);
+
+
 }
 
 <div class="schedule-container">
@@ -69,156 +70,199 @@
 
 <style>
     .schedule-container {
-        overflow: auto;
-        position: relative;
-        border: 1px solid #e9ecef;
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        height: calc(100vh - 3.5rem - 32px);
-        width: calc(100vw)
+    overflow: auto;
+    position: relative;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    height: calc(100vh - 3.5rem - 32px);
+    width: calc(100vw)
     }
 
     @@media (min-width: 768px) {
-        .schedule-container {
-            overflow: auto;
-            position: relative;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            height: calc(100vh - 3.5rem - 32px);
-            width: calc(100vw - 8rem - 250px) !important;
-        }
+    .schedule-container {
+    overflow: auto;
+    position: relative;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    height: calc(100vh - 3.5rem - 32px);
+    width: calc(100vw - 8rem - 250px) !important;
+    }
     }
 
     .schedule-table {
-        min-width: 100%;
-        border-collapse: collapse;
-        background-color: #fff;
+    min-width: 100%;
+    border-collapse: collapse;
+    background-color: #fff;
     }
 
     .time-cell {
-        width: 10em;
-        padding: 10px;
-        text-align: right;
-        border: 1px solid #e9ecef;
-        font-size: 12px;
-        color: #6c757d;
-        background-color: #f8f9fa;
-        position: sticky;
-        left: 0;
-        z-index: 2;
+    width: 10em;
+    padding: 10px;
+    text-align: right;
+    border: 1px solid #e9ecef;
+    font-size: 12px;
+    color: #6c757d;
+    background-color: #f8f9fa;
+    position: sticky;
+    left: 0;
+    z-index: 2;
     }
 
     .header-cell {
-        min-width: 10em;
-        padding: 10px;
-        text-align: center;
-        font-weight: bold;
-        border: 1px solid #e9ecef;
-        background-color: #f8f9fa;
-        position: sticky;
-        top: 0;
-        z-index: 1;
+    min-width: 10em;
+    padding: 10px;
+    text-align: center;
+    font-weight: bold;
+    border: 1px solid #e9ecef;
+    background-color: #f8f9fa;
+    position: sticky;
+    top: 0;
+    z-index: 1;
     }
 
     .data-cell {
-        min-width: 10em;
-        padding: 5px;
-        text-align: center;
-        border: 1px solid #e9ecef;
-        height: 60px;
-        position: relative;
-        background-color: white;
-        vertical-align: middle;
+    min-width: 10em;
+    padding: 5px;
+    text-align: center;
+    border: 1px solid #e9ecef;
+    height: 60px;
+    position: relative;
+    background-color: white;
+    vertical-align: middle;
     }
 
     .order-block {
-        position: absolute;
-        top: 5px;
-        left: 5px;
-        right: 5px;
-        bottom: 5px;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
-        font-weight: bold;
-        color: white;
-        overflow: hidden;
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    right: 5px;
+    bottom: 5px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-weight: bold;
+    color: white;
+    overflow: hidden;
     }
 
     .order-block-inner {
-        padding: 8px;
+    padding: 8px;
     }
 
     .order1 {
-        background-color: #ffc107;
+    background-color: #ffc107;
     }
     /* 黄色 */
     .order2 {
-        background-color: #007bff;
+    background-color: #007bff;
     }
     /* 蓝色 */
     .order3 {
-        background-color: #28a745;
+    background-color: #28a745;
     }
     /* 绿色 */
     .other {
-        background-color: #6c757d;
+    background-color: #6c757d;
     }
     /* 灰色 */
     .other-orange {
-        background-color: #fd7e14;
+    background-color: #fd7e14;
     }
     /* 橙色 */
     .empty {
-        background-color: white;
+    background-color: white;
     }
     /* 空白 */
 
     .current-time-indicator {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 2px;
-        background-color: red;
-        z-index: 10;
-        pointer-events: none;
-        display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: red;
+    z-index: 10;
+    pointer-events: none;
+    display: none;
     }
 </style>
 
 <script>
-    // 更新当前时间指示器
-    function updateCurrentTimeIndicator(foundRow, relativePosition) {
-        const scheduleContainer = document.querySelector('.schedule-container');
-        const timeCells = document.querySelectorAll('.time-cell');
-        const currentTimeIndicator = document.getElementById('currentTimeIndicator');
+    // 声明全局变量
+    let times = [];
 
-        if (foundRow !== -1 && foundRow < timeCells.length - 1) {
-            const row = timeCells[foundRow].parentElement;
-            const rowRect = row.getBoundingClientRect();
-            const scheduleRect = scheduleContainer.getBoundingClientRect();
-
-            // 设置指示器位置
-            const indicatorTop = rowRect.top + relativePosition * rowRect.height;
-            const indicatorLeft = rowRect.left;
-            const indicatorWidth = rowRect.right - rowRect.left;
-            currentTimeIndicator.style.top = `${indicatorTop}px`;
-            currentTimeIndicator.style.left = `${indicatorLeft}px`;
-            currentTimeIndicator.style.width = `${indicatorWidth}px`;
-            currentTimeIndicator.style.display = 'block';
-        } else {
-            currentTimeIndicator.style.display = 'none';
-        }
+    // 初始化全局变量
+    function initializeTimes(timesArray) {
+    times = timesArray.map(time => new Date(time));
+    console.log("Times initialized:", times);
     }
+
+    // 计算当前时间所在的行和相对位置
+    function calculateCurrentTimeRow(times) {
+    // 设置当前时间为调试时间
+    const now = new Date("2023-10-10T09:05:00");
+
+    let foundRow = -1;
+    let relativePosition = 0;
+
+    for (let i = 0; i < times.length - 1; i++) {
+    const startTime = new Date(times[i]);
+    const endTime = new Date(times[i + 1]);
+
+    if (now >= startTime && now < endTime) {
+    foundRow = i;
+
+    const totalDuration = (endTime - startTime) / 1000; // 总秒数
+    const elapsedDuration = (now - startTime) / 1000; // 已经过的秒数
+    relativePosition = elapsedDuration / totalDuration;
+
+    break;
+    }
+    }
+
+    return { foundRow, relativePosition };
+    }
+
+    // 更新当前时间指示器
+    function updateCurrentTimeIndicator() {
+    const scheduleContainer = document.querySelector('.schedule-container');
+    const timeCells = document.querySelectorAll('.time-cell');
+    const currentTimeIndicator = document.getElementById('currentTimeIndicator');
+
+    if (!scheduleContainer || timeCells.length === 0 || !currentTimeIndicator) {
+    console.warn('DOM elements not ready');
+    return;
+    }
+
+    const { foundRow, relativePosition } = calculateCurrentTimeRow(times);
+
+    if (foundRow !== -1 && foundRow < timeCells.length - 1) {
+    const row = timeCells[foundRow].parentElement;
+    const rowRect = row.getBoundingClientRect();
+    const scheduleRect = scheduleContainer.getBoundingClientRect();
+
+    // 设置指示器位置
+    const indicatorTop = rowRect.top + relativePosition * rowRect.height;
+    const indicatorLeft = rowRect.left;
+    const indicatorWidth = rowRect.right - rowRect.left;
+    currentTimeIndicator.style.top = `${indicatorTop}px`;
+    currentTimeIndicator.style.left = `${indicatorLeft}px`;
+    currentTimeIndicator.style.width = `${indicatorWidth}px`;
+    currentTimeIndicator.style.display = 'block';
+    } else {
+    currentTimeIndicator.style.display = 'none';
+    }
+    }
+
 
     // 页面加载完成后初始化
     window.onload = () => {
-        updateCurrentTimeIndicator(@foundRow, @relativePosition);
-        setInterval(updateCurrentTimeIndicator, 1000);
+    updateCurrentTimeIndicator();
+    setInterval(updateCurrentTimeIndicator, 1000);
     };
 </script>
 
@@ -233,6 +277,18 @@
     public class TableRow
     {
         public List<TableCell> Cells { get; set; } = new List<TableCell>();
+    }
+
+    private List<DateTime> times;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            times = GenerateTimeAxis();
+            var timesAsStrings = times.Select(t => t.ToString("yyyy-MM-ddTHH:mm:ss")).ToList();
+            await JSRuntime.InvokeVoidAsync("initializeTimes", timesAsStrings);
+        }
     }
 
     private List<DateTime> GenerateTimeAxis()
@@ -288,7 +344,7 @@
             cell.CssClass = $"data-cell";
             cell.RowSpan = duration;
             cell.Content = $"<div class=\"order-block {item.Type}\">" +
-                           $"<div class=\"order-block-inner\">{item.Order}{(item.Quantity.HasValue ? $"<br>{item.Quantity}个" : "")}</div>" +
+                           $"<div class=\"order-block-inner\">{item.Order}{(item.Quantity.HasValue ? $"<br/>{item.Quantity}个" : "")}</div>" +
                            $"</div>";
 
             // 清空后续单元格
@@ -312,38 +368,5 @@
     private static bool ToDelete(TableCell cell)
     {
         return cell.Content.Equals("delete");
-    }
-
-    private (int, double) CalculateCurrentTimeRow(List<DateTime> times)
-    {
-        // 设置当前时间为调试时间
-        var now = new DateTime(2023, 10, 10, 9, 5, 0);
-
-        // 查找当前时间所在的行
-        int foundRow = -1;
-        for (int i = 0; i < times.Count - 1; i++)
-        {
-            var startTime = times[i];
-            var endTime = times[i + 1];
-
-            if (now >= startTime && now < endTime)
-            {
-                foundRow = i;
-                break;
-            }
-        }
-
-        if (foundRow != -1)
-        {
-            var startTime = times[foundRow];
-            var endTime = times[foundRow + 1];
-            var totalDuration = (endTime - startTime).TotalSeconds;
-            var elapsedDuration = (now - startTime).TotalSeconds;
-            var relativePosition = elapsedDuration / totalDuration;
-
-            return (foundRow, relativePosition);
-        }
-
-        return (-1, 0);
     }
 }
