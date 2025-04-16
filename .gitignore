@@ -8,3 +8,7 @@ Readme Pics/.DS_Store
 /.vs/TanpopoAPS/config
 /.vs/TanpopoAPS/v17/DocumentLayout.json
 /.vs/TanpopoAPS/v17/DocumentLayout.backup.json
+/.vs/TanpopoAPS/copilot-chat
+/.vs/TanpopoAPS/CopilotIndices
+/TanpopoClient/bin/Debug
+/TanpopoHost/bin/Debug
