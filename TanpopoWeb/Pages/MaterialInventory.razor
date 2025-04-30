@@ -1,0 +1,403 @@
+﻿@page "/material-inventory"
+@using System.ComponentModel.DataAnnotations
+@using System.Net.Http.Json
+@using TanpopoWeb.Data
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject HttpClient Http
+
+<h3>物料与库存管理</h3>
+<hr />
+
+@if (materials == null)
+{
+    <p>正在加载物料列表...</p>
+}
+else
+{
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5>物料列表</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th @onclick="() => SortMaterials(nameof(MaterialViewModel.MaterialCode))">
+                                        物料编码
+                                        @GetSortIcon(nameof(MaterialViewModel.MaterialCode))
+                                    </th>
+                                    <th @onclick="() => SortMaterials(nameof(MaterialViewModel.MaterialName))">
+                                        物料名称
+                                        @GetSortIcon(nameof(MaterialViewModel.MaterialName))
+                                    </th>
+                                    <th @onclick="() => SortMaterials(nameof(MaterialViewModel.CurrentStock))">
+                                        当前库存量
+                                        @GetSortIcon(nameof(MaterialViewModel.CurrentStock))
+                                    </th>
+                                    <th @onclick="() => SortMaterials(nameof(MaterialViewModel.SafetyStock))">
+                                        安全库存
+                                        @GetSortIcon(nameof(MaterialViewModel.SafetyStock))
+                                    </th>
+                                    <th @onclick="() => SortMaterials(nameof(MaterialViewModel.AvailabilityStatus))">
+                                        可用性状态
+                                        @GetSortIcon(nameof(MaterialViewModel.AvailabilityStatus))
+                                    </th>
+                                    <th @onclick="() => SortMaterials(nameof(MaterialViewModel.ReorderPoint))">
+                                        再订货点(ROP)
+                                        @GetSortIcon(nameof(MaterialViewModel.ReorderPoint))
+                                    </th>
+                                    <th @onclick="() => SortMaterials(nameof(MaterialViewModel.EconomicOrderQuantity))">
+                                        经济订购批量(EOQ)
+                                        @GetSortIcon(nameof(MaterialViewModel.EconomicOrderQuantity))
+                                    </th>
+                                    <th @onclick="() => SortMaterials(nameof(MaterialViewModel.LeadTime))">
+                                        供应商交货周期
+                                        @GetSortIcon(nameof(MaterialViewModel.LeadTime))
+                                    </th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in materials)
+                                {
+                                    <tr @ondblclick="() => OpenEditMaterialModal(item)">
+                                        <td>@item.MaterialCode</td>
+                                        <td>@item.MaterialName</td>
+                                        <td>@item.CurrentStock</td>
+                                        <td>@item.SafetyStock</td>
+                                        <td>@item.AvailabilityStatus.GetDescription()</td>
+                                        <td>@item.ReorderPoint</td>
+                                        <td>@item.EconomicOrderQuantity</td>
+                                        <td>@item.LeadTime</td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-outline-primary me-1" @onclick="(() => OpenEditMaterialModal(item))">
+                                                <i class="bi bi-pencil"></i> 编辑
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="(() => DeleteMaterial(item))">
+                                                <i class="bi bi-trash"></i> 删除
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button class="btn btn-success" @onclick="OpenNewMaterialModal">
+                        <i class="bi bi-plus"></i> 新建物料
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- 物料详细信息模态窗口 -->
+<div class="modal fade" id="materialDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">@(selectedMaterial?.MaterialCode ?? "新建物料") - 详细信息</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                @if (selectedMaterial != null)
+                {
+                    <form @onsubmit="SaveMaterial">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="MaterialCode" class="form-label">物料编码</label>
+                                    <input type="text" class="form-control" id="MaterialCode" @bind="selectedMaterial.MaterialCode" required />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="MaterialName" class="form-label">物料名称</label>
+                                    <input type="text" class="form-control" id="MaterialName" @bind="selectedMaterial.MaterialName" required />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="CurrentStock" class="form-label">当前库存量</label>
+                                    <input type="number" class="form-control" id="CurrentStock" @bind="selectedMaterial.CurrentStock" min="0" required />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="SafetyStock" class="form-label">安全库存</label>
+                                    <input type="number" class="form-control" id="SafetyStock" @bind="selectedMaterial.SafetyStock" min="0" required />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="AvailabilityStatus" class="form-label">可用性状态</label>
+                                    <select class="form-select" id="AvailabilityStatus" @bind="selectedMaterial.AvailabilityStatus">
+                                        @foreach (var status in Enum.GetValues<MaterialAvailabilityStatus>())
+                                        {
+                                            <option value="@status">@status.GetDescription()</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="ReorderPoint" class="form-label">再订货点(ROP)</label>
+                                    <input type="number" class="form-control" id="ReorderPoint" @bind="selectedMaterial.ReorderPoint" min="0" required />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="EconomicOrderQuantity" class="form-label">经济订购批量(EOQ)</label>
+                                    <input type="number" class="form-control" id="EconomicOrderQuantity" @bind="selectedMaterial.EconomicOrderQuantity" min="0" required />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="LeadTime" class="form-label">供应商交货周期</label>
+                                    <input type="number" class="form-control" id="LeadTime" @bind="selectedMaterial.LeadTime" min="0" required />
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                }
+                else
+                {
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                        <p class="mt-3">正在加载物料信息...</p>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" @onclick="SaveMaterial">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(message))
+{
+    <div class="alert alert-success mt-3">
+        @message
+    </div>
+}
+
+@code {
+    private List<MaterialViewModel> materials;
+    private MaterialViewModel selectedMaterial;
+    private string currentSortColumn = nameof(MaterialViewModel.MaterialCode);
+    private SortDirection currentSortDirection = SortDirection.Ascending;
+    private string message = string.Empty;
+    private IJSObjectReference? modalModule;
+    private BootstrapModal? modal;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMaterials();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            modalModule = await JSRuntime.InvokeAsync<IJSObjectReference>("bootstrap.Modal.getOrCreateInstance", "#materialDetailModal");
+            modal = new BootstrapModal(modalModule);
+        }
+    }
+
+    private async Task LoadMaterials()
+    {
+        try
+        {
+            materials = await Http.GetFromJsonAsync<List<MaterialViewModel>>("api/material");
+        }
+        catch (Exception ex)
+        {
+            message = $"加载物料失败: {ex.Message}";
+        }
+
+        // 默认排序
+        SortMaterials(currentSortColumn);
+        StateHasChanged();
+    }
+
+    private void SortMaterials(string column)
+    {
+        if (currentSortColumn == column)
+        {
+            currentSortDirection = currentSortDirection == SortDirection.Ascending
+                ? SortDirection.Descending
+                : SortDirection.Ascending;
+        }
+        else
+        {
+            currentSortColumn = column;
+            currentSortDirection = SortDirection.Ascending;
+        }
+
+        switch (currentSortColumn)
+        {
+            case nameof(MaterialViewModel.MaterialCode):
+                materials = currentSortDirection == SortDirection.Ascending
+                    ? materials.OrderBy(m => m.MaterialCode).ToList()
+                    : materials.OrderByDescending(m => m.MaterialCode).ToList();
+                break;
+            case nameof(MaterialViewModel.MaterialName):
+                materials = currentSortDirection == SortDirection.Ascending
+                    ? materials.OrderBy(m => m.MaterialName).ToList()
+                    : materials.OrderByDescending(m => m.MaterialName).ToList();
+                break;
+            case nameof(MaterialViewModel.CurrentStock):
+                materials = currentSortDirection == SortDirection.Ascending
+                    ? materials.OrderBy(m => m.CurrentStock).ToList()
+                    : materials.OrderByDescending(m => m.CurrentStock).ToList();
+                break;
+            case nameof(MaterialViewModel.SafetyStock):
+                materials = currentSortDirection == SortDirection.Ascending
+                    ? materials.OrderBy(m => m.SafetyStock).ToList()
+                    : materials.OrderByDescending(m => m.SafetyStock).ToList();
+                break;
+            case nameof(MaterialViewModel.AvailabilityStatus):
+                materials = currentSortDirection == SortDirection.Ascending
+                    ? materials.OrderBy(m => m.AvailabilityStatus).ToList()
+                    : materials.OrderByDescending(m => m.AvailabilityStatus).ToList();
+                break;
+            case nameof(MaterialViewModel.ReorderPoint):
+                materials = currentSortDirection == SortDirection.Ascending
+                    ? materials.OrderBy(m => m.ReorderPoint).ToList()
+                    : materials.OrderByDescending(m => m.ReorderPoint).ToList();
+                break;
+            case nameof(MaterialViewModel.EconomicOrderQuantity):
+                materials = currentSortDirection == SortDirection.Ascending
+                    ? materials.OrderBy(m => m.EconomicOrderQuantity).ToList()
+                    : materials.OrderByDescending(m => m.EconomicOrderQuantity).ToList();
+                break;
+            case nameof(MaterialViewModel.LeadTime):
+                materials = currentSortDirection == SortDirection.Ascending
+                    ? materials.OrderBy(m => m.LeadTime).ToList()
+                    : materials.OrderByDescending(m => m.LeadTime).ToList();
+                break;
+        }
+
+        StateHasChanged();
+    }
+
+    private string GetSortIcon(string column)
+    {
+        if (currentSortColumn != column)
+            return "";
+
+        return currentSortDirection == SortDirection.Ascending
+            ? "↑"
+            : "↓";
+    }
+
+    private void OpenEditMaterialModal(MaterialViewModel material)
+    {
+        selectedMaterial = (MaterialViewModel)material.Clone();
+        modal?.Show();
+    }
+
+    private void OpenNewMaterialModal()
+    {
+        selectedMaterial = new MaterialViewModel
+            {
+                MaterialCode = "NEW-MAT-XXXX",
+                MaterialName = "新物料",
+                CurrentStock = 0,
+                SafetyStock = 0,
+                AvailabilityStatus = MaterialAvailabilityStatus.Available,
+                ReorderPoint = 0,
+                EconomicOrderQuantity = 0,
+                LeadTime = 0
+            };
+        modal?.Show();
+    }
+
+    private async Task SaveMaterial()
+    {
+        try
+        {
+            // 调用控制器保存物料
+            var response = await Http.PostAsJsonAsync("api/material/SaveMaterial", selectedMaterial);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<dynamic>();
+                message = result.Message;
+
+                // 重新加载物料列表
+                await LoadMaterials();
+
+                // 关闭模态窗口
+                modal?.Hide();
+            }
+            else
+            {
+                message = $"保存物料失败: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            message = $"保存物料失败: {ex.Message}";
+        }
+
+        // 3秒后清空消息
+        await Task.Delay(3000);
+        message = "";
+    }
+
+    private async Task DeleteMaterial(MaterialViewModel material)
+    {
+        try
+        {
+            var response = await Http.DeleteAsync($"api/material/{material.MaterialCode}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<dynamic>();
+                message = result.Message;
+
+                // 重新加载物料列表
+                await LoadMaterials();
+            }
+            else
+            {
+                message = $"删除物料失败: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            message = $"删除物料失败: {ex.Message}";
+        }
+
+        // 3秒后清空消息
+        await Task.Delay(3000);
+        message = "";
+    }
+
+    public class BootstrapModal
+    {
+        private readonly IJSObjectReference _modal;
+
+        public BootstrapModal(IJSObjectReference modal)
+        {
+            _modal = modal;
+        }
+
+        public async Task Show()
+        {
+            await _modal.InvokeVoidAsync("show");
+        }
+
+        public async Task Hide()
+        {
+            await _modal.InvokeVoidAsync("hide");
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (_modal != null)
+            {
+                await _modal.DisposeAsync();
+            }
+        }
+    }
+}

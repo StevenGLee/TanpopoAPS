@@ -1,15 +1,11 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using TanpopoWeb.Data;
+using System.Net.Http;
 
 namespace TanpopoWeb
 {
@@ -29,6 +25,8 @@ namespace TanpopoWeb
             services.AddRazorPages();
             services.AddServerSideBlazor();
             services.AddSingleton<WeatherForecastService>();
+            services.AddHttpClient(); // 添加此行以注册 HttpClient
+            services.AddControllersWithViews(); // 添加此行以注册控制器
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -52,6 +50,7 @@ namespace TanpopoWeb
 
             app.UseEndpoints(endpoints =>
             {
+                endpoints.MapControllers(); // 添加此行以映射控制器路由
                 endpoints.MapBlazorHub();
                 endpoints.MapFallbackToPage("/_Host");
             });
